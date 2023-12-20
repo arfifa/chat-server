@@ -53,3 +53,5 @@ const limiter = rateLimit({
 app.use("/tawk", limiter);
 
 module.exports = app;
+
+// mongodb+srv://arfifa:<password>@cluster0.296pary.mongodb.net/?retryWrites=true&w=majority
