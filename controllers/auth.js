@@ -5,6 +5,7 @@ const { promisify } = require("util");
 //
 const User = require("../models/user");
 const filterObj = require("../utils/filterObj");
+const mailService = require("../services/mailer");
 
 const signToken = (userId) => jwt.sign({ userId }, process.env.JWT_SECRET);
 
@@ -66,6 +67,13 @@ exports.sendOTP = async (req, res, next) => {
   });
 
   // TODO => Send Mail
+  mailService.sendMail({
+    to: "example@gmail.com",
+    sender: "contact@codingmonk.com",
+    subject: "OTP for Tawk",
+    html: `<p>Your OTP is ${new_otp}. This is valid for 10 Mins.</p>`,
+    attachments: [],
+  });
 
   res.status(200).json({
     status: "success",

@@ -7,7 +7,7 @@ const bodyParser = require("body-parser");
 const xss = require("xss-clean");
 const cors = require("cors");
 //
-const routes = require("./routes/index");
+const routes = require("./routes");
 
 const app = express();
 
