@@ -51,7 +51,7 @@ const userSchema = new mongoose.Schema({
     default: false,
   },
   otp: {
-    type: Number,
+    type: String,
   },
   otp_expiry_time: {
     type: Date,
@@ -59,11 +59,12 @@ const userSchema = new mongoose.Schema({
 });
 
 userSchema.pre("save", async function (next) {
-  // Only run this if OTP actually modified
-  if (!this.isModified("otp")) return next();
+  // Only run this function if password was actually modified
+  if (!this.isModified("otp") || !this.otp) return next();
 
-  // Hash the OTP with the cost of 12
-  this.otp = await bcrypt.hash(this.otp, 12);
+  // Hash the otp with cost of 12
+  this.otp = await bcrypt.hash(this.otp.toString(), 12);
+
   next();
 });
 
@@ -88,10 +89,12 @@ userSchema.methods.correctOTP = async function (
   canditateOTP, //123456
   userOTP // 423kj435ui random string encode
 ) {
+  console.log("canditateOTP", canditateOTP);
+  console.log("userOTP", userOTP);
   return await bcrypt.compare(canditateOTP, userOTP);
 };
 
-userSchema.method.createPasswordResetToken = function () {
+userSchema.methods.createPasswordResetToken = function () {
   const resetToken = crypto.randomBytes(32).toString("hex");
 
   this.passwordResetToken = crypto
@@ -118,5 +121,5 @@ userSchema.method.changedPasswordAfter = function (JWTTimeStamp) {
 };
 
 let User = mongoose.model("User", userSchema);
-User = new User();
+// User = new User();
 module.exports = User;

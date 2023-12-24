@@ -6,6 +6,8 @@ const { promisify } = require("util");
 const User = require("../models/user");
 const filterObj = require("../utils/filterObj");
 const mailService = require("../services/mailer");
+const otp = require("../Templates/Mail/otp");
+const resetPassword = require("../Templates/Mail/resetPassword");
 
 const signToken = (userId) => jwt.sign({ userId }, process.env.JWT_SECRET);
 
@@ -19,7 +21,7 @@ exports.register = async (req, res, next) => {
   const filteredBody = filterObj(
     req.body,
     "firstName",
-    "LastName",
+    "lastName",
     "password",
     "email"
   );
@@ -61,17 +63,19 @@ exports.sendOTP = async (req, res, next) => {
 
   const otp_expiry_time = Date.now() + 10 * 60 * 1000;
 
-  await User.findByIdAndUpdate(userId, {
-    otp: new_otp,
+  const user = await User.findByIdAndUpdate(userId, {
     otp_expiry_time,
   });
 
-  // TODO => Send Mail
+  user.otp = new_otp;
+
+  await user.save({ new: true, validateModifiedOnly: true });
+
   mailService.sendMail({
-    to: "example@gmail.com",
-    sender: "contact@codingmonk.com",
+    to: user.email,
+    sender: "arfifablackotdev@gmail.com",
     subject: "OTP for Tawk",
-    html: `<p>Your OTP is ${new_otp}. This is valid for 10 Mins.</p>`,
+    html: otp(user.firstName, new_otp),
     attachments: [],
   });
 
@@ -94,6 +98,13 @@ exports.verifyOTP = async (req, res, next) => {
     return res.status(400).json({
       status: "error",
       message: "Email is Invalid or OTP expired",
+    });
+  }
+
+  if (user.verified) {
+    return res.status(400).json({
+      status: "error",
+      message: "Email is already verified",
     });
   }
 
@@ -152,10 +163,12 @@ exports.login = async (req, res, next) => {
   }
 
   const token = signToken(userDoc._id);
+
   res.status(200).json({
     status: "success",
     message: "Logged is successfully",
     token,
+    user_id: userDoc._id,
   });
 };
 
@@ -208,7 +221,7 @@ exports.forgotPassword = async (req, res, next) => {
   // 1) Get users by email
   const user = await User.findOne({ email: req.body.email });
   if (!user) {
-    res.status(400).json({
+    res.status(404).json({
       status: "error",
       message: "There is no user with given email address",
     });
@@ -218,11 +231,18 @@ exports.forgotPassword = async (req, res, next) => {
 
   // 2) Generate the random reset token
   const resetToken = user.createPasswordResetToken();
+  await user.save({ validateBeforeSave: false });
 
-  const resetURL = `https://tawk.com/auth/reset-password/?code${resetToken}`;
+  const resetURL = `https://tawk.com/auth/reset-password/?code=${resetToken}`;
 
   try {
-    // TODO => Send Email With Reset URL
+    mailService.sendMail({
+      to: user.email,
+      sender: "arfifablackotdev@gmail.com",
+      subject: "OTP for Tawk",
+      html: resetPassword(user.firstName, resetURL),
+      attachments: [],
+    });
 
     res.status(200).json({
       status: "success",
@@ -243,14 +263,13 @@ exports.forgotPassword = async (req, res, next) => {
 
 exports.resetPassword = async (req, res, next) => {
   const { password, passwordConfirm } = req.body;
-  // 1) Get user based on token
-
+  // 1) Get user based on the token
   const hashedToken = crypto
     .createHash("sha256")
-    .update(req.params.token)
+    .update(req.body.token)
     .digest("hex");
 
-  const user = await User.findOne({
+  let user = await User.findOne({
     passwordResetToken: hashedToken,
     passwordResetExpired: { $gt: Date.now() },
   });
@@ -261,8 +280,6 @@ exports.resetPassword = async (req, res, next) => {
       status: "error",
       message: "Token is Invalid or Expried",
     });
-
-    return;
   }
 
   if (password !== passwordConfirm) {
@@ -272,21 +289,19 @@ exports.resetPassword = async (req, res, next) => {
     });
   }
 
-  // 3) Update users password and set resetToken & expiry to undefined
+  // 3) Update passwordChangedAt property for the user
   user.password = req.body.password;
+  user.passwordChangedAt = Date.now();
   user.passwordResetToken = undefined;
   user.passwordResetExpired = undefined;
-
   await user.save();
 
-  // 4) Log in the user and Send new JWT
-
-  // TODO => send an email to user informing about password
-
+  // 4) Log the user in, send JWT
   const token = signToken(user._id);
+
   res.status(200).json({
     status: "success",
-    message: "Password Reseted successfully",
+    message: "Password Reseted Successfully",
     token,
   });
 };
