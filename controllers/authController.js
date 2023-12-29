@@ -233,7 +233,7 @@ exports.forgotPassword = async (req, res, next) => {
   const resetToken = user.createPasswordResetToken();
   await user.save({ validateBeforeSave: false });
 
-  const resetURL = `https://tawk.com/auth/reset-password/?code=${resetToken}`;
+  const resetURL = `http://localhost:3000/auth/new-password/?token=${resetToken}`;
 
   try {
     mailService.sendMail({
