@@ -126,6 +126,7 @@ exports.verifyOTP = async (req, res, next) => {
     status: "success",
     message: "OTP verified successfully!",
     token,
+    user_id: user._id,
   });
 };
 
