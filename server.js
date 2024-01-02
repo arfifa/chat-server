@@ -2,6 +2,7 @@ const app = require("./app");
 const dotenv = require("dotenv");
 dotenv.config({ path: "./config.env" });
 const mongoose = require("mongoose");
+const path = require("path");
 
 const { Server } = require("socket.io");
 
@@ -14,6 +15,7 @@ process.on("ancaughtException", (err) => {
 const http = require("http");
 const User = require("./models/user");
 const FriendRequest = require("./models/friendRequest");
+const { file } = require("googleapis/build/src/apis/file");
 const server = http.createServer(app);
 
 const io = new Server(server, {
@@ -54,7 +56,7 @@ io.on("connection", async (socket) => {
   console.log(`User connected ${socket_id}`);
 
   if (!!user_id) {
-    await User.findByIdAndUpdate(user_id, { socket_id });
+    await User.findByIdAndUpdate(user_id, { socket_id, status: "Online" });
   }
 
   socket.on("friend_request", async (data) => {
@@ -110,7 +112,53 @@ io.on("connection", async (socket) => {
     });
   });
 
-  socket.on("end", function () {
+  // Handle text/link messages
+
+  socket.on("text_message", (data) => {
+    console.log("Received Message", data);
+
+    // data: {to, from, text}
+
+    // create a new conversation if it doesn't exist yet or add new message to the message list
+
+    // save to db
+
+    // emit incoming_message -> to user
+
+    // emit outgoing_message -> to user
+  });
+
+  socket.id("text_message", (data) => {
+    console.log("Received Message", data);
+
+    // data: {to, from, text, file}
+
+    // get the file extension
+    const fileExtension = path.extname(data.file.name);
+
+    // generate a unique filename
+    const filename = `${Date.now()}_${Math.floor(Math.random * 10000)}${file}`;
+
+    // upload file to AWS s3
+
+    // create a new conversation if it doesn't exist yet or add new message to the message list
+
+    // save to db
+
+    // emit incoming_message -> to user
+
+    // emit outgoing_message -> to user
+  });
+
+  // -------------- HANDLE SOCKET DISCONNECTION ----------------- //
+
+  socket.on("end", async (data) => {
+    // Find user by ID and set status as offline
+    if (data.user_id) {
+      await User.findByIdAndUpdate(data.user_id, { status: "Offline" });
+    }
+
+    // todo => broadcast to all conversation rooms of this user that this user is offline(disconnected)
     console.log("Closing connection");
     socket.disconnect(0);
   });

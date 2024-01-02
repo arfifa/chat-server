@@ -65,6 +65,10 @@ const userSchema = new mongoose.Schema({
       ref: "User",
     },
   ],
+  status: {
+    type: String,
+    enum: ["Online", "Offline"],
+  },
 });
 
 userSchema.pre("save", async function (next) {
