@@ -47,8 +47,10 @@ exports.getUsers = async (req, res, next) => {
 
 exports.getRequests = async (req, res, next) => {
   const requests = await FriendRequest.find({
-    receipent: req.user._id,
+    recipient: req.user._id,
   }).populate("sender", "_id firstName lastName");
+
+  console.log("request", requests);
 
   res.status(200).json({
     status: "success",

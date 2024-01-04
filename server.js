@@ -6,6 +6,11 @@ const path = require("path");
 
 const { Server } = require("socket.io");
 
+// Model
+const User = require("./models/user");
+const FriendRequest = require("./models/friendRequest");
+const OneToOneMessage = require("./models/oneToOneMessage");
+
 process.on("ancaughtException", (err) => {
   console.log(err);
   console.log("UNCAUGHT Exception! Shutting down ...");
@@ -13,9 +18,6 @@ process.on("ancaughtException", (err) => {
 });
 
 const http = require("http");
-const User = require("./models/user");
-const FriendRequest = require("./models/friendRequest");
-const { file } = require("googleapis/build/src/apis/file");
 const server = http.createServer(app);
 
 const io = new Server(server, {
@@ -48,7 +50,7 @@ server.listen(port, () => {
 });
 
 io.on("connection", async (socket) => {
-  console.log(JSON.stringify(socket.handshake.query));
+  console.log("io.socket", JSON.stringify(socket.handshake.query));
   const user_id = socket.handshake.query["user_id"];
 
   const socket_id = socket.id;
@@ -112,8 +114,46 @@ io.on("connection", async (socket) => {
     });
   });
 
-  // Handle text/link messages
+  socket.on("get_direct_conversations", async ({ user_id }, callback) => {
+    const existing_conversations = await OneToOneMessage.find({
+      participants: { $all: [user_id] },
+    }).populate("participants", "firstName lastName avatar _id email status");
 
+    console.log(existing_conversations);
+
+    callback(existing_conversations);
+  });
+
+  socket.on("start_conversation", async (data) => {
+    // data: {to: {}, from: {}}
+
+    // check if there is any existing conversation
+    const existing_conversations = await OneToOneMessage.find({
+      participants: { $size: 2, $all: [to, from] },
+    }).populate("participants", "firstName lastName _id email status");
+
+    console.log("Existing Conversation", existing_conversations[0]);
+
+    // if no => create a new OneToOneMessage doc & emit event "start_chat" & send conversation details as payload
+    if (existing_conversations.length === 0) {
+      let new_chat = await OneToOneMessage.create({
+        participants: [to, from],
+      });
+
+      new_chat = await OneToOneMessage.findById(new_chat).populate(
+        "participants",
+        "firstName lastName _id email status"
+      );
+
+      console.log(new_chat);
+      // if yes => just emit event "start_chat" & send conversation details as payload
+      socket.emit("start_chat", new_chat);
+    } else {
+      socket.emit("start_chat", existing_conversations[0]);
+    }
+  });
+
+  // Handle text/link messages
   socket.on("text_message", (data) => {
     console.log("Received Message", data);
 
@@ -128,7 +168,7 @@ io.on("connection", async (socket) => {
     // emit outgoing_message -> to user
   });
 
-  socket.id("text_message", (data) => {
+  socket.on("file_message", (data) => {
     console.log("Received Message", data);
 
     // data: {to, from, text, file}
@@ -137,7 +177,9 @@ io.on("connection", async (socket) => {
     const fileExtension = path.extname(data.file.name);
 
     // generate a unique filename
-    const filename = `${Date.now()}_${Math.floor(Math.random * 10000)}${file}`;
+    const filename = `${Date.now()}_${Math.floor(
+      Math.random * 10000
+    )}${fileExtension}`;
 
     // upload file to AWS s3
 
