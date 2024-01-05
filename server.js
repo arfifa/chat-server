@@ -153,19 +153,54 @@ io.on("connection", async (socket) => {
     }
   });
 
+  socket.on("get_messages", async (data, callback) => {
+    try {
+      const { messages } = await OneToOneMessage.findById(
+        data.conversation_id
+      ).select("messages");
+
+      callback(messages);
+    } catch (error) {
+      console.log(error);
+    }
+  });
+
   // Handle text/link messages
-  socket.on("text_message", (data) => {
+  socket.on("text_message", async (data) => {
     console.log("Received Message", data);
 
-    // data: {to, from, text}
+    // data = {to, from, text}
+    const { message, conversation_id, form, to, type } = data;
 
-    // create a new conversation if it doesn't exist yet or add new message to the message list
+    const to_user = await User.findById(to);
+    const from_user = await User.findById(from);
 
+    // message => {to, from, type, created_at, text, file}
+    const new_message = {
+      to,
+      from,
+      type,
+      created_at: Date.now(),
+      text: message,
+    };
+
+    // fetch OneToOneMessage Doc & push a new message to existing conversation
+    const chat = await OneToOneMessage.findById(conversation_id);
+    chat.messages.push(new_message);
     // save to db
+    await chat.save({ new: true, validateModifiedOnly: true });
 
     // emit incoming_message -> to user
+    io.to(to_user?.socket_id).emit("new_message", {
+      conversation_id,
+      message: new_message,
+    });
 
     // emit outgoing_message -> to user
+    io.to(from_user?.socket_id).emit("new_message", {
+      conversation_id,
+      message: new_message,
+    });
   });
 
   socket.on("file_message", (data) => {
